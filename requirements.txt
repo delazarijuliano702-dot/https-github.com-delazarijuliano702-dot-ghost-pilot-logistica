@@ -1,0 +1,122 @@
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from io import BytesIO
+
+st.set_page_config(page_title="Ghost-Pilot Enterprise", layout="wide")
+st.title("🦅 Ghost-Pilot Enterprise | Inteligência & Logística")
+
+# Banco de Dados em Sessão
+if 'db' not in st.session_state:
+    st.session_state.db = pd.DataFrame([
+        {"SKU": "Produto Exemplo", "Estoque": 150, "Venda_Diaria": 10, "Custo": 50.0, "Preco": 120.0, "LeadTime": 5}
+    ])
+
+# 1. ENTRADA DE DADOS
+st.subheader("📋 Adicionar Novo Item")
+with st.container(border=True):
+    c1, c2, c3, c4 = st.columns(4)
+    with c1:
+        n = st.text_input("Nome SKU")
+        e = st.number_input("Estoque", min_value=0, value=100)
+    with c2:
+        v = st.number_input("Venda/Dia", min_value=1, value=5)
+        l = st.number_input("Lead Time", min_value=0, value=7)
+    with c3:
+        ct = st.number_input("Custo R$", min_value=0.0, value=10.0)
+        pr = st.number_input("Preço R$", min_value=0.0, value=25.0)
+    with c4:
+        st.write("###")
+        if st.button("➕ Adicionar", use_container_width=True):
+            novo = {"SKU": n, "Estoque": e, "Venda_Diaria": v, "Custo": ct, "Preco": pr, "LeadTime": l}
+            st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([novo])], ignore_index=True)
+
+# 2. TABELA EDITÁVEL COM NOVOS ITENS
+st.divider()
+st.subheader("📊 Painel de Controle (Edite direto na tabela)")
+df_editado = st.data_editor(st.session_state.db, num_rows="dynamic", width="stretch")
+st.session_state.db = df_editado
+
+# 3. CÁLCULOS LOGÍSTICOS AVANÇADOS
+if not st.session_state.db.empty:
+    df = st.session_state.db.copy()
+    
+    # Cálculos para o Cliente
+    df['Cobertura (Dias)'] = (df['Estoque'] / df['Venda_Diaria']).astype(int)
+    df['Ponto de Pedido (Qtd)'] = df['Venda_Diaria'] * df['LeadTime']
+    df['Margem Bruta (%)'] = (((df['Preco'] - df['Custo']) / df['Preco']) * 100).round(2)
+    df['Status'] = df.apply(lambda x: "🚨 COMPRAR AGORA" if x['Estoque'] <= x['Ponto de Pedido (Qtd)'] else "✅ ESTOQUE OK", axis=1)
+
+    st.dataframe(df, width="stretch")
+
+    # BOTÃO EXCEL
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False, sheet_name='Relatorio_Logistico')
+    st.download_button(label="📥 Baixar Relatório para Excel", data=output.getvalue(), file_name="relatorio_logistico.xlsx", mime="application/vnd.ms-excel")
+
+    # 4. GRÁFICO DE TENDÊNCIA
+    st.divider()
+    sku_sel = st.selectbox("Análise Visual de Ruptura:", df['SKU'].unique())
+    d = df[df['SKU'] == sku_sel].iloc[0]
+    proj = [max(0, d['Estoque'] - (d['Venda_Diaria'] * i)) for i in range(21)]
+    fig = px.line(x=list(range(21)), y=proj, title=f"Projeção de Esgotamento: {sku_sel}", labels={'x':'Dias', 'y':'Qtd'})
+    fig.add_hline(y=d['Ponto de Pedido (Qtd)'], line_dash="dash", line_color="orange", annotation_text="Ponto de Pedido")
+    st.plotly_chart(fig, use_container_width=True)
+import streamlit as st
+import pandas as pd
+import plotly.express as px
+from io import BytesIO
+
+st.set_page_config(page_title="Ghost-Pilot Mobile", layout="wide")
+st.title("🦅 Ghost-Pilot Enterprise")
+
+# Inicialização de Banco de Dados
+if 'db' not in st.session_state:
+    st.session_state.db = pd.DataFrame([
+        {"SKU": "Exemplo A", "Estoque": 200, "Venda_Diaria": 12, "Custo": 45.0, "Preco": 95.0, "LeadTime": 5}
+    ])
+
+# ENTRADA DE DADOS (Design Compacto para Celular)
+with st.expander("➕ Adicionar/Editar Produtos", expanded=False):
+    c1, c2 = st.columns(2)
+    with c1:
+        n = st.text_input("Nome")
+        e = st.number_input("Estoque", value=100)
+        v = st.number_input("Venda/Dia", value=10)
+    with c2:
+        l = st.number_input("Lead Time", value=7)
+        ct = st.number_input("Custo R$", value=10.0)
+        pr = st.number_input("Preço R$", value=25.0)
+    if st.button("Salvar no Sistema"):
+        novo = {"SKU": n, "Estoque": e, "Venda_Diaria": v, "Custo": ct, "Preco": pr, "LeadTime": l}
+        st.session_state.db = pd.concat([st.session_state.db, pd.DataFrame([novo])], ignore_index=True)
+
+# PROCESSAMENTO E CÁLCULOS PARA O CLIENTE
+if not st.session_state.db.empty:
+    df = st.session_state.db.copy()
+    df['Giro'] = (df['Venda_Diaria'] * 30 / df['Estoque']).round(2)
+    df['Valor_Estoque'] = df['Estoque'] * df['Custo']
+    df['Status'] = df.apply(lambda x: "🚨 COMPRAR" if x['Estoque'] <= (x['Venda_Diaria'] * x['LeadTime']) else "✅ OK", axis=1)
+
+    # TABELA EDITÁVEL
+    st.subheader("📊 Painel de Controle")
+    df_editado = st.data_editor(df, num_rows="dynamic", width="stretch")
+    st.session_state.db = df_editado.drop(columns=['Giro', 'Valor_Estoque', 'Status'], errors='ignore')
+
+    # BOTÃO EXCEL
+    output = BytesIO()
+    with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+        df.to_excel(writer, index=False)
+    st.download_button("📥 Baixar Relatório (Excel)", output.getvalue(), "logistica.xlsx")
+
+    # GRÁFICO MOBILE FRIENDLY
+    st.divider()
+    sku_foco = st.selectbox("Análise de Tendência:", df['SKU'].unique())
+    d = df[df['SKU'] == sku_foco].iloc[0]
+    proj = [max(0, d['Estoque'] - (d['Venda_Diaria'] * i)) for i in range(15)]
+    fig = px.line(x=list(range(15)), y=proj, title=f"Esgotamento: {sku_foco}")
+    st.plotly_chart(fig, use_container_width=True)
+plotly
+xlsxwriter
+pandas
